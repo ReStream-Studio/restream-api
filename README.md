@@ -15,3 +15,5 @@ sqlc generate -f ./db/sqlc.yaml
 goose -dir ./db/migrations postgres "host=localhost user=postgres dbname=postgres password=postgres
  sslmode=disable" up
 ```
+
+//TODO take these scripts into bash, make, whatever ....
