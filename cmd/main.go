@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"log"
 
@@ -11,23 +10,15 @@ import (
 	"os"
 
 	"github.com/ReStream-Studio/restream-api/db/generated/user"
+	"github.com/ReStream-Studio/restream-api/utils"
 	"github.com/gofiber/fiber/v3"
+	"github.com/golang-jwt/jwt/v5"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
-
-	"github.com/ReStream-Studio/restream-api/utils"
+	"github.com/joho/godotenv"
 )
 
-func coolJSON(object interface{}) string {
-	jsonBytes, err := json.MarshalIndent(object, "", "  ")
-	if err != nil {
-		log.Fatal(err)
-	}
-	return string(jsonBytes)
-}
-
 func main() {
-
 	app := fiber.New()
 
 	app.Get("/", func(c fiber.Ctx) error {
@@ -104,6 +95,24 @@ func register(c fiber.Ctx) error {
 	return c.Status(200).JSON(fiber.Map{"message": "User created"})
 }
 
+var (
+	key   string
+	token *jwt.Token
+	str   string
+)
+
+func generateJWT() (string, error) {
+	err := godotenv.Load()
+	if err != nil {
+		log.Fatal("Error loading .env file")
+	}
+
+	key = os.Getenv("JWT_SECRET")
+	token = jwt.New(jwt.SigningMethodHS256)
+	str, _ = token.SignedString(key)
+	return str, err
+}
+
 func login(c fiber.Ctx) error {
 	if c.Method() != http.MethodPost {
 		return c.Status(405).JSON(fiber.Map{"message": "Method not allowed"})
@@ -139,9 +148,18 @@ func login(c fiber.Ctx) error {
 
 	user, err := queries.GetUser(ctx, email)
 
+	if err != nil {
+		log.Fatal(err, "could not find the user")
+	}
+
 	if !utils.CheckPasswordHash(password, user.Password.String) {
 		return c.Status(401).JSON(fiber.Map{"message": "Invalid credentials"})
 	}
 
-	return c.Status(200).JSON(fiber.Map{"message": "Login successful"})
+	token, err := generateJWT()
+	if err != nil {
+		log.Fatal(err, "some issues creating the token")
+	}
+
+	return c.Status(200).JSON(fiber.Map{"message": "Login successful", "token": token})
 }
