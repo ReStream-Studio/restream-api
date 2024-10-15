@@ -1,4 +1,6 @@
 version: "2"
+cloud:
+  project: '01JA8VAA50A5VAQFZ3DXXM9NYH'
 sql:
   - engine: "postgresql"
     queries: "query.sql"
@@ -8,3 +10,9 @@ sql:
         package: "user"
         out: "generated/user"
         sql_package: "pgx/v5"
+        overrides:
+          - db_type: "text"
+            go_type: "github.com/jackc/pgx/v5/pgtype.Text"
+
+
+

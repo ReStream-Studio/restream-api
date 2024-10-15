@@ -11,12 +11,31 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
-const createUser = `-- name: CreateUser :one
+const createSession = `-- name: CreateSession :exec
+WITH deleted_session AS (
+  DELETE FROM sessions
+  WHERE user_id = $1
+  RETURNING id, user_id, access_token, refresh_token
+)
+INSERT INTO sessions (user_id, access_token, refresh_token)
+VALUES ($1, $2, $3)
+`
+
+type CreateSessionParams struct {
+	UserID       pgtype.UUID
+	AccessToken  pgtype.Text
+	RefreshToken pgtype.Text
+}
+
+func (q *Queries) CreateSession(ctx context.Context, arg CreateSessionParams) error {
+	_, err := q.db.Exec(ctx, createSession, arg.UserID, arg.AccessToken, arg.RefreshToken)
+	return err
+}
+
+const createUser = `-- name: CreateUser :exec
 INSERT INTO
     users (username, email, password)
 VALUES ($1, $2, $3)
-RETURNING
-    id, username, email, password
 `
 
 type CreateUserParams struct {
@@ -25,16 +44,9 @@ type CreateUserParams struct {
 	Password pgtype.Text
 }
 
-func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (User, error) {
-	row := q.db.QueryRow(ctx, createUser, arg.Username, arg.Email, arg.Password)
-	var i User
-	err := row.Scan(
-		&i.ID,
-		&i.Username,
-		&i.Email,
-		&i.Password,
-	)
-	return i, err
+func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) error {
+	_, err := q.db.Exec(ctx, createUser, arg.Username, arg.Email, arg.Password)
+	return err
 }
 
 const getUser = `-- name: GetUser :one

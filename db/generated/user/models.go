@@ -11,8 +11,8 @@ import (
 type Session struct {
 	ID           pgtype.UUID
 	UserID       pgtype.UUID
-	AccessToken  string
-	RefreshToken string
+	AccessToken  pgtype.Text
+	RefreshToken pgtype.Text
 }
 
 type User struct {

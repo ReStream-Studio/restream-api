@@ -4,12 +4,13 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"time"
 
 	"net/http"
 	"net/mail"
 	"os"
 
-	"github.com/ReStream-Studio/restream-api/db/generated/user"
+	genUser "github.com/ReStream-Studio/restream-api/db/generated/user"
 	"github.com/ReStream-Studio/restream-api/utils"
 	"github.com/gofiber/fiber/v3"
 	"github.com/golang-jwt/jwt/v5"
@@ -73,7 +74,7 @@ func register(c fiber.Ctx) error {
 	}
 	defer conn.Close(ctx)
 
-	queries := user.New(conn)
+	queries := genUser.New(conn)
 
 	_, err = queries.GetUser(ctx, email)
 
@@ -87,7 +88,7 @@ func register(c fiber.Ctx) error {
 		log.Fatal(err)
 	}
 
-	queries.CreateUser(ctx, user.CreateUserParams{
+	queries.CreateUser(ctx, genUser.CreateUserParams{
 		Email:    email,
 		Password: pgtype.Text{String: hashed, Valid: true},
 	})
@@ -144,7 +145,7 @@ func login(c fiber.Ctx) error {
 	}
 	defer conn.Close(ctx)
 
-	queries := user.New(conn)
+	queries := genUser.New(conn)
 
 	user, err := queries.GetUser(ctx, email)
 
@@ -156,10 +157,37 @@ func login(c fiber.Ctx) error {
 		return c.Status(401).JSON(fiber.Map{"message": "Invalid credentials"})
 	}
 
-	token, err := generateJWT()
+	accessToken, err := generateJWT()
 	if err != nil {
 		log.Fatal(err, "some issues creating the token")
 	}
 
-	return c.Status(200).JSON(fiber.Map{"message": "Login successful", "token": token})
+	refreshToken, err := generateJWT()
+	if err != nil {
+		log.Fatal(err, "some issues creating the token")
+	}
+
+	err = queries.CreateSession(ctx, genUser.CreateSessionParams{
+		UserID:       user.ID,
+		AccessToken:  pgtype.Text{String: accessToken, Valid: true},
+		RefreshToken: pgtype.Text{String: refreshToken, Valid: true},
+	})
+
+	c.Cookie(&fiber.Cookie{
+		Name:     "access_token",
+		Value:    accessToken,
+		Expires:  time.Now().Add(time.Hour * 1),
+		HTTPOnly: true,
+		Secure:   true,
+	})
+
+	c.Cookie(&fiber.Cookie{
+		Name:     "refresh_token",
+		Value:    refreshToken,
+		Expires:  time.Now().Add(time.Hour * 24),
+		HTTPOnly: true,
+		Secure:   true,
+	})
+
+	return c.Status(200).JSON(fiber.Map{"message": "Login successful"})
 }

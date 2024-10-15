@@ -7,8 +7,8 @@ CREATE TABLE IF NOT EXISTS users (
 
 CREATE TABLE IF NOT EXISTS sessions (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid (),
-    user_id UUID NOT NULL,
-    access_token VARCHAR(255) NOT NULL,
-    refresh_token VARCHAR(255) NOT NULL,
+    user_id UUID NOT NULL UNIQUE,
+    access_token TEXT NOT NULL,
+    refresh_token TEXT NOT NULL,
     FOREIGN KEY (user_id) REFERENCES users (id)
 );
