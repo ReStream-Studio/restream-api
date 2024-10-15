@@ -10,9 +10,6 @@ sql:
         package: "user"
         out: "generated/user"
         sql_package: "pgx/v5"
-        overrides:
-          - db_type: "text"
-            go_type: "github.com/jackc/pgx/v5/pgtype.Text"
 
 
 

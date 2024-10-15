@@ -97,7 +97,7 @@ func register(c fiber.Ctx) error {
 }
 
 var (
-	key   string
+	key   []byte
 	token *jwt.Token
 	str   string
 )
@@ -108,9 +108,14 @@ func generateJWT() (string, error) {
 		log.Fatal("Error loading .env file")
 	}
 
-	key = os.Getenv("JWT_SECRET")
+	key = []byte(os.Getenv("JWT_SECRET"))
 	token = jwt.New(jwt.SigningMethodHS256)
-	str, _ = token.SignedString(key)
+	str, err := token.SignedString(key)
+
+	if err != nil {
+		return "", err
+	}
+
 	return str, err
 }
 
@@ -169,8 +174,8 @@ func login(c fiber.Ctx) error {
 
 	err = queries.CreateSession(ctx, genUser.CreateSessionParams{
 		UserID:       user.ID,
-		AccessToken:  pgtype.Text{String: accessToken, Valid: true},
-		RefreshToken: pgtype.Text{String: refreshToken, Valid: true},
+		AccessToken:  accessToken,
+		RefreshToken: refreshToken,
 	})
 
 	c.Cookie(&fiber.Cookie{

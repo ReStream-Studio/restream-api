@@ -23,8 +23,8 @@ VALUES ($1, $2, $3)
 
 type CreateSessionParams struct {
 	UserID       pgtype.UUID
-	AccessToken  pgtype.Text
-	RefreshToken pgtype.Text
+	AccessToken  string
+	RefreshToken string
 }
 
 func (q *Queries) CreateSession(ctx context.Context, arg CreateSessionParams) error {
