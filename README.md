@@ -16,4 +16,4 @@ goose -dir ./db/migrations postgres "host=localhost user=postgres dbname=postgre
  sslmode=disable" up
 ```
 
-//TODO take these scripts into bash, make, whatever ....
+//TODO take these scripts into bash, make, json, or lua. Still researching
