@@ -16,4 +16,6 @@ goose -dir ./db/migrations postgres "host=localhost user=postgres dbname=postgre
  sslmode=disable" up
 ```
 
+### Provide env file from env.example folder
+
 //TODO take these scripts into bash, make, json, or lua. Still researching
