@@ -13,10 +13,8 @@ import (
 	genUser "github.com/ReStream-Studio/restream-api/db/generated/user"
 	"github.com/ReStream-Studio/restream-api/utils"
 	"github.com/gofiber/fiber/v3"
-	"github.com/golang-jwt/jwt/v5"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
-	"github.com/joho/godotenv"
 )
 
 func main() {
@@ -96,29 +94,6 @@ func register(c fiber.Ctx) error {
 	return c.Status(200).JSON(fiber.Map{"message": "User created"})
 }
 
-var (
-	key   []byte
-	token *jwt.Token
-	str   string
-)
-
-func generateJWT() (string, error) {
-	err := godotenv.Load()
-	if err != nil {
-		log.Fatal("Error loading .env file")
-	}
-
-	key = []byte(os.Getenv("JWT_SECRET"))
-	token = jwt.New(jwt.SigningMethodHS256)
-	str, err := token.SignedString(key)
-
-	if err != nil {
-		return "", err
-	}
-
-	return str, err
-}
-
 func login(c fiber.Ctx) error {
 	if c.Method() != http.MethodPost {
 		return c.Status(405).JSON(fiber.Map{"message": "Method not allowed"})
@@ -162,12 +137,12 @@ func login(c fiber.Ctx) error {
 		return c.Status(401).JSON(fiber.Map{"message": "Invalid credentials"})
 	}
 
-	accessToken, err := generateJWT()
+	accessToken, err := utils.GenerateJWT()
 	if err != nil {
 		log.Fatal(err, "some issues creating the token")
 	}
 
-	refreshToken, err := generateJWT()
+	refreshToken, err := utils.GenerateJWT()
 	if err != nil {
 		log.Fatal(err, "some issues creating the token")
 	}
@@ -178,6 +153,10 @@ func login(c fiber.Ctx) error {
 		RefreshToken: refreshToken,
 	})
 
+	if err != nil {
+		log.Fatal(err, "failed to create session")
+	}
+
 	c.Cookie(&fiber.Cookie{
 		Name:     "access_token",
 		Value:    accessToken,
@@ -186,13 +165,29 @@ func login(c fiber.Ctx) error {
 		Secure:   true,
 	})
 
-	c.Cookie(&fiber.Cookie{
-		Name:     "refresh_token",
-		Value:    refreshToken,
-		Expires:  time.Now().Add(time.Hour * 24),
-		HTTPOnly: true,
-		Secure:   true,
-	})
-
 	return c.Status(200).JSON(fiber.Map{"message": "Login successful"})
+}
+
+func logout(c fiber.Ctx) error {
+	if c.Method() != http.MethodPost {
+		return c.Status(405).JSON(fiber.Map{"message": "Method not allowed"})
+	}
+
+	ctx := context.Background()
+	dbConnectionString := "postgres://postgres:postgres@localhost:5432/postgres"
+	conn, err := pgx.Connect(ctx, dbConnectionString)
+
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Unable to connect to database: %v\n", err)
+		os.Exit(1)
+	}
+	defer conn.Close(ctx)
+
+	queries := genUser.New(conn)
+
+	accessToken := c.Cookies("access_token")
+
+	if err != nil {
+		return c.Status(401).JSON(fiber.Map{"message": "Invalid access token"})
+	}
 }
