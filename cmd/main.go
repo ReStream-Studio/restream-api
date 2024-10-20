@@ -94,6 +94,8 @@ func register(c fiber.Ctx) error {
 	return c.Status(200).JSON(fiber.Map{"message": "User created"})
 }
 
+const accessTokenKey = "access_token"
+
 func login(c fiber.Ctx) error {
 	if c.Method() != http.MethodPost {
 		return c.Status(405).JSON(fiber.Map{"message": "Method not allowed"})
@@ -158,7 +160,7 @@ func login(c fiber.Ctx) error {
 	}
 
 	c.Cookie(&fiber.Cookie{
-		Name:     "access_token",
+		Name:     accessTokenKey,
 		Value:    accessToken,
 		Expires:  time.Now().Add(time.Hour * 1),
 		HTTPOnly: true,
@@ -185,8 +187,13 @@ func logout(c fiber.Ctx) error {
 
 	queries := genUser.New(conn)
 
-	accessToken := c.Cookies("access_token")
+	accessToken := c.Cookies(accessTokenKey)
+	if accessToken == "" {
+		return c.Status(401).JSON(fiber.Map{"message": "Access token missing"})
+	}
 
+	// Todo Get user id by token
+	userID, err := utils.GetUserIDFromToken(accessToken)
 	if err != nil {
 		return c.Status(401).JSON(fiber.Map{"message": "Invalid access token"})
 	}
