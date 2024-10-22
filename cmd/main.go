@@ -28,7 +28,8 @@ func main() {
 	auth := v1.Group("/auth")
 	auth.Post("/register", register)
 	auth.Post("/login", login)
-	log.Fatal(app.Listen(":3000"))
+	auth.Post("/logout", logout)
+	log.Fatal(app.Listen(":3010"))
 }
 
 func validateEmail(email string) bool {
@@ -63,7 +64,7 @@ func register(c fiber.Ctx) error {
 	}
 
 	ctx := context.Background()
-	dbConnectionString := "postgres://postgres:postgres@localhost:5432/postgres"
+	dbConnectionString := "postgres://postgres:postgres@localhost:5433/postgres"
 	conn, err := pgx.Connect(ctx, dbConnectionString)
 
 	if err != nil {
@@ -118,7 +119,7 @@ func login(c fiber.Ctx) error {
 	}
 
 	ctx := context.Background()
-	dbConnectionString := "postgres://postgres:postgres@localhost:5432/postgres"
+	dbConnectionString := "postgres://postgres:postgres@localhost:5433/postgres"
 	conn, err := pgx.Connect(ctx, dbConnectionString)
 
 	if err != nil {
@@ -162,7 +163,7 @@ func login(c fiber.Ctx) error {
 	c.Cookie(&fiber.Cookie{
 		Name:     accessTokenKey,
 		Value:    accessToken,
-		Expires:  time.Now().Add(time.Hour * 1),
+		Expires:  time.Now().UTC().Add(time.Hour * 1),
 		HTTPOnly: true,
 		Secure:   true,
 	})
@@ -176,7 +177,7 @@ func logout(c fiber.Ctx) error {
 	}
 
 	ctx := context.Background()
-	dbConnectionString := "postgres://postgres:postgres@localhost:5432/postgres"
+	dbConnectionString := "postgres://postgres:postgres@localhost:5433/postgres"
 	conn, err := pgx.Connect(ctx, dbConnectionString)
 
 	if err != nil {
@@ -185,16 +186,32 @@ func logout(c fiber.Ctx) error {
 	}
 	defer conn.Close(ctx)
 
-	queries := genUser.New(conn)
-
 	accessToken := c.Cookies(accessTokenKey)
 	if accessToken == "" {
 		return c.Status(401).JSON(fiber.Map{"message": "Access token missing"})
 	}
 
-	// Todo Get user id by token
-	userID, err := utils.GetUserIDFromToken(accessToken)
+	queries := genUser.New(conn)
+
+	userId, err := queries.GetUserBySession(ctx, accessToken)
+
 	if err != nil {
 		return c.Status(401).JSON(fiber.Map{"message": "Invalid access token"})
 	}
+
+	err = queries.DeleteSession(ctx, userId)
+
+	if err != nil {
+		return c.Status(500).JSON(fiber.Map{"message": "Failed to logout"})
+	}
+
+	c.Cookie(&fiber.Cookie{
+		Name:     accessTokenKey,
+		Value:    "",
+		Expires:  time.Unix(0, 0),
+		HTTPOnly: true,
+		Secure:   true,
+	})
+
+	return c.Status(200).JSON(fiber.Map{"message": "Logout successful"})
 }

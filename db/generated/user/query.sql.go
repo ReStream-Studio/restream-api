@@ -12,12 +12,20 @@ import (
 )
 
 const createSession = `-- name: CreateSession :exec
-WITH deleted_session AS (
-  DELETE FROM sessions
-  WHERE user_id = $1
-  RETURNING id, user_id, access_token, refresh_token
-)
-INSERT INTO sessions (user_id, access_token, refresh_token)
+WITH
+    deleted_session AS (
+        DELETE FROM sessions
+        WHERE
+            user_id = $1
+        RETURNING
+            id, user_id, access_token, refresh_token
+    )
+INSERT INTO
+    sessions (
+        user_id,
+        access_token,
+        refresh_token
+    )
 VALUES ($1, $2, $3)
 `
 
@@ -49,6 +57,15 @@ func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) error {
 	return err
 }
 
+const deleteSession = `-- name: DeleteSession :exec
+DELETE FROM sessions WHERE user_id = $1
+`
+
+func (q *Queries) DeleteSession(ctx context.Context, userID pgtype.UUID) error {
+	_, err := q.db.Exec(ctx, deleteSession, userID)
+	return err
+}
+
 const getUser = `-- name: GetUser :one
 SELECT id, username, email, password FROM users WHERE email = $1
 `
@@ -63,6 +80,17 @@ func (q *Queries) GetUser(ctx context.Context, email string) (User, error) {
 		&i.Password,
 	)
 	return i, err
+}
+
+const getUserBySession = `-- name: GetUserBySession :one
+SELECT user_id FROM sessions WHERE access_token = $1
+`
+
+func (q *Queries) GetUserBySession(ctx context.Context, accessToken string) (pgtype.UUID, error) {
+	row := q.db.QueryRow(ctx, getUserBySession, accessToken)
+	var user_id pgtype.UUID
+	err := row.Scan(&user_id)
+	return user_id, err
 }
 
 const getUsers = `-- name: GetUsers :many

@@ -10,10 +10,24 @@ INSERT INTO
 VALUES ($1, $2, $3);
 
 -- name: CreateSession :exec
-WITH deleted_session AS (
-  DELETE FROM sessions
-  WHERE user_id = $1
-  RETURNING *
-)
-INSERT INTO sessions (user_id, access_token, refresh_token)
+WITH
+    deleted_session AS (
+        DELETE FROM sessions
+        WHERE
+            user_id = $1
+        RETURNING
+            *
+    )
+INSERT INTO
+    sessions (
+        user_id,
+        access_token,
+        refresh_token
+    )
 VALUES ($1, $2, $3);
+
+-- name: GetUserBySession :one
+SELECT user_id FROM sessions WHERE access_token = $1;
+
+-- name: DeleteSession :exec
+DELETE FROM sessions WHERE user_id = $1;
