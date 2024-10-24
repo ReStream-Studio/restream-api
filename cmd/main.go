@@ -25,10 +25,13 @@ func main() {
 	})
 
 	v1 := app.Group("/v1")
+
 	auth := v1.Group("/auth")
 	auth.Post("/register", register)
 	auth.Post("/login", login)
 	auth.Post("/logout", logout)
+	auth.Get("/protected", protected)
+
 	log.Fatal(app.Listen(":3010"))
 }
 
@@ -44,7 +47,7 @@ type Credentials struct {
 
 func register(c fiber.Ctx) error {
 	if c.Method() != http.MethodPost {
-		return c.Status(405).JSON(fiber.Map{"message": "Method not allowed"})
+		return c.Status(fiber.StatusMethodNotAllowed).JSON(fiber.Map{"message": "Method not allowed"})
 	}
 
 	creds := new(Credentials)
@@ -56,11 +59,11 @@ func register(c fiber.Ctx) error {
 	password := creds.Password
 
 	if creds.Email == "" || creds.Password == "" {
-		return c.Status(400).JSON(fiber.Map{"message": "Missing email or password"})
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"message": "Missing email or password"})
 	}
 
 	if !validateEmail(email) {
-		return c.Status(400).JSON(fiber.Map{"message": "Invalid email"})
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"message": "Invalid email"})
 	}
 
 	ctx := context.Background()
@@ -78,7 +81,7 @@ func register(c fiber.Ctx) error {
 	_, err = queries.GetUser(ctx, email)
 
 	if err == nil {
-		return c.Status(400).JSON(fiber.Map{"message": "User already exists"})
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"message": "User already exists"})
 	}
 
 	hashed, err := utils.HashPassword(password)
@@ -92,14 +95,14 @@ func register(c fiber.Ctx) error {
 		Password: pgtype.Text{String: hashed, Valid: true},
 	})
 
-	return c.Status(200).JSON(fiber.Map{"message": "User created"})
+	return c.Status(fiber.StatusOK).JSON(fiber.Map{"message": "User created"})
 }
 
 const accessTokenKey = "access_token"
 
 func login(c fiber.Ctx) error {
 	if c.Method() != http.MethodPost {
-		return c.Status(405).JSON(fiber.Map{"message": "Method not allowed"})
+		return c.Status(fiber.StatusMethodNotAllowed).JSON(fiber.Map{"message": "Method not allowed"})
 	}
 
 	creds := new(Credentials)
@@ -111,11 +114,11 @@ func login(c fiber.Ctx) error {
 	password := creds.Password
 
 	if creds.Email == "" || creds.Password == "" {
-		return c.Status(400).JSON(fiber.Map{"message": "Missing email or password"})
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"message": "Missing email or password"})
 	}
 
 	if !validateEmail(email) {
-		return c.Status(400).JSON(fiber.Map{"message": "Invalid email"})
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"message": "Invalid email"})
 	}
 
 	ctx := context.Background()
@@ -137,15 +140,15 @@ func login(c fiber.Ctx) error {
 	}
 
 	if !utils.CheckPasswordHash(password, user.Password.String) {
-		return c.Status(401).JSON(fiber.Map{"message": "Invalid credentials"})
+		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"message": "Invalid credentials"})
 	}
 
-	accessToken, err := utils.GenerateJWT()
+	accessToken, err := utils.GenerateJWT("access")
 	if err != nil {
 		log.Fatal(err, "some issues creating the token")
 	}
 
-	refreshToken, err := utils.GenerateJWT()
+	refreshToken, err := utils.GenerateJWT("refresh")
 	if err != nil {
 		log.Fatal(err, "some issues creating the token")
 	}
@@ -168,12 +171,12 @@ func login(c fiber.Ctx) error {
 		Secure:   true,
 	})
 
-	return c.Status(200).JSON(fiber.Map{"message": "Login successful"})
+	return c.Status(fiber.StatusOK).JSON(fiber.Map{"message": "Login successful"})
 }
 
 func logout(c fiber.Ctx) error {
 	if c.Method() != http.MethodPost {
-		return c.Status(405).JSON(fiber.Map{"message": "Method not allowed"})
+		return c.Status(fiber.StatusMethodNotAllowed).JSON(fiber.Map{"message": "Method not allowed"})
 	}
 
 	ctx := context.Background()
@@ -188,7 +191,7 @@ func logout(c fiber.Ctx) error {
 
 	accessToken := c.Cookies(accessTokenKey)
 	if accessToken == "" {
-		return c.Status(401).JSON(fiber.Map{"message": "Access token missing"})
+		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"message": "Access token missing"})
 	}
 
 	queries := genUser.New(conn)
@@ -196,13 +199,13 @@ func logout(c fiber.Ctx) error {
 	userId, err := queries.GetUserBySession(ctx, accessToken)
 
 	if err != nil {
-		return c.Status(401).JSON(fiber.Map{"message": "Invalid access token"})
+		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"message": "Invalid access token"})
 	}
 
 	err = queries.DeleteSession(ctx, userId)
 
 	if err != nil {
-		return c.Status(500).JSON(fiber.Map{"message": "Failed to logout"})
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"message": "Failed to logout"})
 	}
 
 	c.Cookie(&fiber.Cookie{
@@ -213,5 +216,22 @@ func logout(c fiber.Ctx) error {
 		Secure:   true,
 	})
 
-	return c.Status(200).JSON(fiber.Map{"message": "Logout successful"})
+	return c.Status(fiber.StatusOK).JSON(fiber.Map{"message": "Logout successful"})
+}
+
+func protected(c fiber.Ctx) error {
+	accessToken := c.Cookies(accessTokenKey)
+
+	// Validate the JWT token
+	_, err := utils.ValidateJWT(accessToken)
+	if err != nil {
+		// If there's an error, the token is invalid or expired
+		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
+			"error": "Unauthorized: Invalid or expired token",
+		})
+	}
+
+	return c.Status(fiber.StatusOK).JSON(fiber.Map{
+		"message": "Access granted to protected route",
+	})
 }
